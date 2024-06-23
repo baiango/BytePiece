@@ -87,7 +87,7 @@ mod tokenizer_trainer {
 		pattern_matches
 	}
 
-	pub fn map_len_ranges(indices: &[usize], length: usize) -> Vec<std::ops::Range<usize>> {
+	pub fn map_usize_to_ranges(indices: &[usize], length: usize) -> Vec<std::ops::Range<usize>> {
 		indices.iter().map(|&i| i..i + length).collect()
 	}
 
@@ -103,6 +103,21 @@ mod tokenizer_trainer {
 		}).collect()
 	}
 
+	fn invert_ranges(merged_ranges: &[std::ops::Range<usize>], byte_index: usize, byte_range_len: usize) -> Vec<std::ops::Range<usize>> {
+		let mut inverted_ranges = vec![];
+
+		if merged_ranges[0].start != byte_index {
+			inverted_ranges = vec![byte_index..merged_ranges[0].start];
+		}
+
+		for range in merged_ranges {
+			if range.end != byte_range_len + byte_index {
+				inverted_ranges.push(range.end..byte_range_len + byte_index);
+			}
+		}
+		inverted_ranges
+	}
+
 	pub fn generate_cutoff_by_pattern(byte_vec: &ConcatenatedByte, pattern: &[u8]) -> Vec<std::ops::Range<usize>> {
 		let mut cutoff = vec![];
 		let mut byte_index = 0;
@@ -114,24 +129,17 @@ mod tokenizer_trainer {
 				continue;
 			}
 
-			let ranges: Vec<std::ops::Range<usize>> = map_len_ranges(&subbyte_output, pattern.len())
+			let ranges: Vec<std::ops::Range<usize>> = map_usize_to_ranges(&subbyte_output, pattern.len())
 				.iter()
 				.map(|range| range.start + byte_index..range.end + byte_index)
 				.collect();
+
 			let merged_ranges = merge_ranges(&ranges);
 			if merged_ranges.is_empty() {
 				continue;
 			}
 
-			let mut inverted_ranges = vec![];
-			if merged_ranges[0].start != byte_index {
-				inverted_ranges = vec![byte_index..merged_ranges[0].start];
-			}
-			for range in merged_ranges {
-				if range.end != byte_range.len() + byte_index {
-					inverted_ranges.push(range.end..byte_range.len() + byte_index);
-				}
-			}
+			let inverted_ranges = invert_ranges(&merged_ranges, byte_index, byte_range.len());
 
 			cutoff.extend(inverted_ranges);
 			byte_index += byte_range.len();
