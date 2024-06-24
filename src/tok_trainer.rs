@@ -212,7 +212,7 @@ pub fn train_tokenizer_rayon_multi_threaded(byte_arr: &[u8], chunk_length: usize
 	println!("Chunk length: {} * {}", chunk_length, chunks.len());
 
 	// Completed; Multi-cores idea: Sum the model within threads,
-	// the memory usage should limited to the amount of threads rathser than a vector,
+	// the memory usage should limited to the amount of threads rather than a vector,
 	// and, it doesn't have to use mutexes to merge the model except at the end
 	let tokenizer_model = Arc::new(Mutex::new(BTreeMap::new()));
 	pool.install(|| groups.par_iter().for_each(|&group| {
