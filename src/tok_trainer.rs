@@ -28,10 +28,10 @@ pub trait SumBPE: Copy + AddAssign<Self> + Into<i32> {}
 impl SumBPE for i16 {}
 impl SumBPE for i32 {}
 
-pub fn count_u8_subvectors(byte_vec: &ConcatenatedByte, dropout: Option<u32>, pre_keyed_map: Option<BTreeMap<Vec<u8>, i16>>) -> BTreeMap<Vec<u8>, i16> {
+pub fn count_u8_subvectors(byte_vec: &ConcatenatedByte, dropout: Option<u32>, pre_keyed_map: Option<&BTreeMap<Vec<u8>, i16>>) -> BTreeMap<Vec<u8>, i16> {
 	// This function takes up 50% of CPU time on average of the whole program
 	// Pre-keying will result in much fewer memcmp
-	let mut counter = pre_keyed_map.unwrap_or(BTreeMap::new()); // BTreeMap is faster than HashMap; profiled with VTune
+	let mut counter = pre_keyed_map.unwrap_or(&BTreeMap::new()).clone(); // BTreeMap is faster than HashMap; profiled with VTune
 	let dropout = dropout.unwrap_or(0xf_ffff);
 
 	let mut loop_count = 0;
@@ -182,6 +182,9 @@ pub fn greedy_bpe_encode(byte: &[u8]) -> BTreeMap<Vec<u8>, i16> {
 		tokenizer_model.insert(best_subvector.clone(), *best_score);
 
 		let cutoff = generate_cutoff_by_pattern(&byte_vec, best_subvector);
+
+		// Memory read and write optimization idea: Don't resize the vector and just rebuild the bounds only
+		// Maybe it's possible to convert `ConcatenatedByte` from `Vec<u8>` to `&[u8]` to speed this up
 		byte_vec = rebuild_2d_byte_vec(&cutoff, &byte_vec);
 	}
 	tokenizer_model
@@ -270,7 +273,7 @@ pub fn demo() {
 #[cfg(test)]
 mod tests {
 	use std::collections::BTreeMap;
-	use crate::*;
+	use crate::tok_trainer::*;
 
 	#[test]
 	fn test_count_u8_subvectors() {
