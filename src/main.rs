@@ -4,4 +4,5 @@ mod tok_codec;
 
 fn main() {
 	tok_trainer::demo();
+	// tok_codec::demo();
 }
