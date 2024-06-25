@@ -13,6 +13,7 @@ use rayon::prelude::*;
 pub struct ConcatenatedByte {
 	// A structure that replaces `Vec<Vec<u8>>` by storing data in a concatenated `Vec<u8>`
 	// This will avoiding the overhead of multiple `Vec<u8>` allocations and providing memory-contiguous storage
+	// But profiled with VTune, this didn't seem to speed up in noticeable way
 	data: Vec<u8>,
 	bounds: Vec<std::ops::Range<usize>>,
 }
@@ -240,7 +241,8 @@ pub fn train_tokenizer_single_thread(byte_arr: &[u8], chunk_length: usize) -> BT
 }
 
 pub fn train_tokenizer(byte_arr: &[u8], chunk_length: Option<usize>, multi_threaded: bool) -> BTreeMap<Vec<u8>, i32> {
-	let chunk_length = min(chunk_length.unwrap_or(512), byte_arr.len());
+	let default_chunk_length = 512;
+	let chunk_length = min(chunk_length.unwrap_or(default_chunk_length), byte_arr.len());
 	let tokenizer_model;
 	if multi_threaded {
 		tokenizer_model = train_tokenizer_rayon_multi_threaded(byte_arr, chunk_length)

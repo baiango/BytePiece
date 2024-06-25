@@ -1,4 +1,4 @@
-const demo_string: &str = "The quick brown fox jumps over the lazy dog.";
+const DEMO_STRING: &str = "The quick brown fox jumps over the lazy dog.";
 
 
 fn a() {
