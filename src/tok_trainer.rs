@@ -11,7 +11,7 @@ use rayon::prelude::*;
 
 
 #[derive(Debug, PartialEq)]
-pub struct ConcatenatedBytes {
+struct ConcatenatedBytes {
 	// A structure that replaces `Vec<Vec<u8>>` by storing data in a concatenated `Vec<u8>`
 	// This will avoid the overhead of multiple `Vec<u8>` allocations and providing memory-contiguous storage
 	// But profiled with VTune, this didn't seem to speed up in noticeable way
@@ -20,7 +20,7 @@ pub struct ConcatenatedBytes {
 }
 
 impl ConcatenatedBytes {
-	pub fn new(data: Vec<u8>, bounds: Vec<std::ops::Range<usize>>) -> Self {
+	fn new(data: Vec<u8>, bounds: Vec<std::ops::Range<usize>>) -> Self {
 		ConcatenatedBytes { data, bounds }
 	}
 
@@ -28,22 +28,21 @@ impl ConcatenatedBytes {
 }
 
 // It'll let `sum_byte_pair_encoding()` accept i16 and i32 inputs
-pub trait SumBPE: Copy + AddAssign<Self> + Into<i32> {}
+trait SumBPE: Copy + AddAssign<Self> + Into<i32> {}
 impl SumBPE for i16 {}
 impl SumBPE for i32 {}
 
 
-fn drop_keys(mut loop_count: u32, dropout: u32, mut counter: BTreeMap<Vec<u8>, i16>) -> (u32, BTreeMap<Vec<u8>, i16>) {
-	loop_count += 1;
-	if loop_count % dropout == 0 {
-		// Dropping keys that are less than 2 saves 85% on average memory
-		// But it dropped keys that might have been more than 1 count late because they were far away
-		counter.retain(|_, &mut count| count > 1);
+fn train_unigram(byte_vec: &ConcatenatedBytes, dropout: Option<u32>, pre_keyed_map: Option<&BTreeMap<Vec<u8>, i16>>) -> BTreeMap<Vec<u8>, i16> {
+	fn drop_keys(mut loop_count: u32, dropout: u32, mut counter: BTreeMap<Vec<u8>, i16>) -> (u32, BTreeMap<Vec<u8>, i16>) {
+		loop_count += 1;
+		if loop_count % dropout == 0 {
+			// Dropping keys that are less than 2 saves 85% on average memory
+			// But it dropped keys that might have been more than 1 count late because they were far away
+			counter.retain(|_, &mut count| count > 1);
+		}
+		(loop_count, counter)
 	}
-	(loop_count, counter)
-}
-
-pub fn train_unigram(byte_vec: &ConcatenatedBytes, dropout: Option<u32>, pre_keyed_map: Option<&BTreeMap<Vec<u8>, i16>>) -> BTreeMap<Vec<u8>, i16> {
 	// This function takes up 50% of CPU time on average of the whole program
 	// Pre-keying will result in much fewer memcmp
 	let mut counter = pre_keyed_map.unwrap_or(&BTreeMap::new()).clone(); // BTreeMap is faster than HashMap; profiled with VTune
@@ -65,7 +64,7 @@ pub fn train_unigram(byte_vec: &ConcatenatedBytes, dropout: Option<u32>, pre_key
 	counter
 }
 
-pub fn numerical_grade_encodable(byte_vec: &ConcatenatedBytes, counter: &BTreeMap<Vec<u8>, i16>) -> BTreeMap<Vec<u8>, i16> {
+fn numerical_grade_encodable(byte_vec: &ConcatenatedBytes, counter: &BTreeMap<Vec<u8>, i16>) -> BTreeMap<Vec<u8>, i16> {
 	// It returns the `count * sub.len() - count * byte_size` as the score,
 	// and assumes that storing tokens take only one byte
 	// But, most likely this is not the case but two bytes
@@ -83,7 +82,7 @@ pub fn numerical_grade_encodable(byte_vec: &ConcatenatedBytes, counter: &BTreeMa
 	scores
 }
 
-pub fn all_subbyte(byte_arr: &[u8], pattern: &[u8], pre_allocate_len: Option<usize>) -> Vec<usize> {
+fn all_subbyte(byte_arr: &[u8], pattern: &[u8], pre_allocate_len: Option<usize>) -> Vec<usize> {
 	let mut pattern_matches = Vec::with_capacity(pre_allocate_len.unwrap_or(0));
 	for (index, slice) in byte_arr.windows(pattern.len()).enumerate() {
 		if pattern == slice {
@@ -93,38 +92,38 @@ pub fn all_subbyte(byte_arr: &[u8], pattern: &[u8], pre_allocate_len: Option<usi
 	pattern_matches
 }
 
-fn map_usize_to_ranges(indices: &[usize], length: usize) -> Vec<std::ops::Range<usize>> {
-	indices.iter().map(|&i| i..i + length).collect()
-}
-
-fn merge_ranges(indices: &[std::ops::Range<usize>]) -> Vec<std::ops::Range<usize>> {
-	indices.chunks(2).filter_map(|chunk| {
-		if chunk.len() < 2 {
-			Some(chunk[0].clone())
-		} else if chunk[0].end == chunk[1].start {
-			Some(chunk[0].start..chunk[1].end)
-		} else {
-			None
-		}
-	}).collect()
-}
-
-fn invert_ranges(merged_ranges: &[std::ops::Range<usize>], byte_index: usize, byte_range_len: usize) -> Vec<std::ops::Range<usize>> {
-	let mut inverted_ranges = vec![];
-
-	if merged_ranges[0].start != byte_index {
-		inverted_ranges = vec![byte_index..merged_ranges[0].start];
+fn generate_cutoff_by_pattern(byte_vec: &ConcatenatedBytes, pattern: &[u8]) -> Vec<std::ops::Range<usize>> {
+	fn map_usize_to_ranges(indices: &[usize], length: usize) -> Vec<std::ops::Range<usize>> {
+		indices.iter().map(|&i| i..i + length).collect()
 	}
 
-	for range in merged_ranges {
-		if range.end != byte_range_len + byte_index {
-			inverted_ranges.push(range.end..byte_range_len + byte_index);
-		}
+	fn merge_ranges(indices: &[std::ops::Range<usize>]) -> Vec<std::ops::Range<usize>> {
+		indices.chunks(2).filter_map(|chunk| {
+			if chunk.len() < 2 {
+				Some(chunk[0].clone())
+			} else if chunk[0].end == chunk[1].start {
+				Some(chunk[0].start..chunk[1].end)
+			} else {
+				None
+			}
+		}).collect()
 	}
-	inverted_ranges
-}
 
-pub fn generate_cutoff_by_pattern(byte_vec: &ConcatenatedBytes, pattern: &[u8]) -> Vec<std::ops::Range<usize>> {
+	fn invert_ranges(merged_ranges: &[std::ops::Range<usize>], byte_index: usize, byte_range_len: usize) -> Vec<std::ops::Range<usize>> {
+		let mut inverted_ranges = vec![];
+
+		if merged_ranges[0].start != byte_index {
+			inverted_ranges = vec![byte_index..merged_ranges[0].start];
+		}
+
+		for range in merged_ranges {
+			if range.end != byte_range_len + byte_index {
+				inverted_ranges.push(range.end..byte_range_len + byte_index);
+			}
+		}
+		inverted_ranges
+	}
+
 	let mut cutoff = vec![];
 	let mut byte_index = 0;
 	for byte_range in &byte_vec.bounds {
@@ -153,7 +152,7 @@ pub fn generate_cutoff_by_pattern(byte_vec: &ConcatenatedBytes, pattern: &[u8]) 
 	cutoff
 }
 
-pub fn rebuild_2d_byte_vec(cutoff: &[std::ops::Range<usize>], byte: &ConcatenatedBytes) -> ConcatenatedBytes {
+fn rebuild_2d_byte_vec(cutoff: &[std::ops::Range<usize>], byte: &ConcatenatedBytes) -> ConcatenatedBytes {
 	let mut new_byte = ConcatenatedBytes::new(vec![], vec![]);
 	for range in cutoff {
 		if range.start != range.end {
@@ -167,7 +166,7 @@ pub fn rebuild_2d_byte_vec(cutoff: &[std::ops::Range<usize>], byte: &Concatenate
 	new_byte
 }
 
-pub fn greedy_bpe_encode(byte: &[u8]) -> BTreeMap<Vec<u8>, i16> {
+fn greedy_bpe_encode(byte: &[u8]) -> BTreeMap<Vec<u8>, i16> {
 	// This method will encode the byte pair encoding using `count * sub.len() - count * byte_size`
 	// greedy scoring method without testing every single combinations so it'd be fast
 	// But, who knows if this will result in optimal size
@@ -199,7 +198,7 @@ pub fn greedy_bpe_encode(byte: &[u8]) -> BTreeMap<Vec<u8>, i16> {
 	tokenizer_model
 }
 
-pub fn sum_byte_pair_encoding<S: SumBPE>(tokenizer: &BTreeMap<Vec<u8>, i32>, stats: &BTreeMap<Vec<u8>, S>) -> BTreeMap<Vec<u8>, i32> {
+fn sum_byte_pair_encoding<S: SumBPE>(tokenizer: &BTreeMap<Vec<u8>, i32>, stats: &BTreeMap<Vec<u8>, S>) -> BTreeMap<Vec<u8>, i32> {
 	// Increasing trainable range idea: Create a bf16 imitation to store higher values in the BPE
 	// But this will increase the update resistance as the number goes up due to quantized rounding errors,
 	// and slowing down the program by not using the built-in ASM instructions but software emulating the bf16 type
@@ -209,7 +208,7 @@ pub fn sum_byte_pair_encoding<S: SumBPE>(tokenizer: &BTreeMap<Vec<u8>, i32>, sta
 	})
 }
 
-pub fn train_tokenizer_rayon_multi_threaded(byte_arr: &[u8], chunk_length: usize) -> BTreeMap<Vec<u8>, i32> {
+fn train_tokenizer_rayon_multi_threaded(byte_arr: &[u8], chunk_length: usize) -> BTreeMap<Vec<u8>, i32> {
 	// Don't use hyper-threading as it uses twice as much memory for a 5% improvement only
 	let num_physical_cores = num_cpus::get_physical();
 	println!("Will use {} threads", num_physical_cores);
@@ -238,7 +237,7 @@ pub fn train_tokenizer_rayon_multi_threaded(byte_arr: &[u8], chunk_length: usize
 	Arc::try_unwrap(tokenizer_model).unwrap().into_inner().unwrap()
 }
 
-pub fn train_tokenizer_single_thread(byte_arr: &[u8], chunk_length: usize) -> BTreeMap<Vec<u8>, i32> {
+fn train_tokenizer_single_thread(byte_arr: &[u8], chunk_length: usize) -> BTreeMap<Vec<u8>, i32> {
 	let mut tokenizer_model = BTreeMap::new();
 	println!("Will use single thread only");
 	for chunk in byte_arr.chunks(chunk_length) {
