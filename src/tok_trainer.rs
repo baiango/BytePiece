@@ -5,6 +5,7 @@ use std::io::Write;
 use std::ops::AddAssign;
 use std::panic;
 use std::{collections::BTreeMap, cmp::min};
+// Don't use those garbage collection stuffs unless you really need it!
 use std::sync::{Arc, Mutex};
 use rayon::prelude::*;
 
@@ -22,6 +23,8 @@ impl ConcatenatedBytes {
 	pub fn new(data: Vec<u8>, bounds: Vec<std::ops::Range<usize>>) -> Self {
 		ConcatenatedBytes { data, bounds }
 	}
+
+	// Don't even bother with methods because they're obfuscated
 }
 
 // It'll let `sum_byte_pair_encoding()` accept i16 and i32 inputs
@@ -40,7 +43,7 @@ fn drop_keys(mut loop_count: u32, dropout: u32, mut counter: BTreeMap<Vec<u8>, i
 	(loop_count, counter)
 }
 
-pub fn count_u8_subvectors(byte_vec: &ConcatenatedBytes, dropout: Option<u32>, pre_keyed_map: Option<&BTreeMap<Vec<u8>, i16>>) -> BTreeMap<Vec<u8>, i16> {
+pub fn train_unigram(byte_vec: &ConcatenatedBytes, dropout: Option<u32>, pre_keyed_map: Option<&BTreeMap<Vec<u8>, i16>>) -> BTreeMap<Vec<u8>, i16> {
 	// This function takes up 50% of CPU time on average of the whole program
 	// Pre-keying will result in much fewer memcmp
 	let mut counter = pre_keyed_map.unwrap_or(&BTreeMap::new()).clone(); // BTreeMap is faster than HashMap; profiled with VTune
@@ -172,7 +175,7 @@ pub fn greedy_bpe_encode(byte: &[u8]) -> BTreeMap<Vec<u8>, i16> {
 	let mut tokenizer_model = BTreeMap::new();
 
 	while !byte_vec.data.is_empty() {
-		let counter = count_u8_subvectors(&byte_vec, None, None);
+		let counter = train_unigram(&byte_vec, None, None);
 		if counter.is_empty() {
 			return tokenizer_model;
 		}
@@ -262,9 +265,11 @@ pub fn train_tokenizer(byte_arr: &[u8], chunk_length: Option<usize>, multi_threa
 
 pub fn demo() {
 	let file = File::open("pexels-pixabay-302743.jpg").expect("Unable to open file");
+	let bytes_to_read = 0xffff_ffff;
+
 	let reader = BufReader::new(file);
 	let mut input = vec![];
-	reader.take(0xffff_ffff).read_to_end(&mut input).expect("Unable to read file");
+	reader.take(bytes_to_read).read_to_end(&mut input).expect("Unable to read file");
 
 	println!("input size: {}", input.len());
 	let result = train_tokenizer(&input, Some(16), true);
@@ -283,7 +288,7 @@ mod tests {
 	use crate::tok_trainer::*;
 
 	#[test]
-	fn test_count_u8_subvectors() {
+	fn test_train_unigram() {
 		let byte_vec = ConcatenatedBytes::new(vec![
 				1, 2, 3, 1, 2, 3, 1, 2,
 				3, 1, 2, 3, 1, 2, 3, 1,
@@ -291,7 +296,8 @@ mod tests {
 			vec![0..8, 8..16]
 		);
 
-		let counter = count_u8_subvectors(&byte_vec, Some(0x3fff), None);
+		let test_dropout = 0x3fff;
+		let counter = train_unigram(&byte_vec, Some(test_dropout), None);
 
 		assert_eq!(*counter.get(&vec![1, 2]).unwrap(), 5);
 		assert_eq!(*counter.get(&vec![3, 1]).unwrap(), 5);
@@ -358,6 +364,7 @@ mod tests {
 
 	#[test]
 	fn test_train_tokenizer() {
+		{ // This will test every functions in the trainer to ensure it won't crash
 		let result_too_short = train_tokenizer(&b"a".to_vec(), Some(2), true);
 		let result = train_tokenizer(&b"abcdabcc".to_vec(), None, false);
 
@@ -365,5 +372,16 @@ mod tests {
 		let mut expected = BTreeMap::new();
 		expected.insert(b"abc".to_vec(), 1);
 		assert_eq!(result, expected);
+		}
+		{ // File test
+		let file = File::open("pexels-pixabay-302743.jpg").expect("Unable to open file");
+		let bytes_to_read = 0xffff_ffff;
+
+		let reader = BufReader::new(file);
+		let mut input = vec![];
+		reader.take(bytes_to_read).read_to_end(&mut input).expect("Unable to read file");
+
+		train_tokenizer(&input, Some(16), true);
+		}
 	}
 }
