@@ -14,41 +14,42 @@ struct TokCodec {
 
 impl TokCodec {
 	fn new(file_path: &str) -> TokCodec {
-		// Work in progress: Buggy
-		unimplemented!();
 		let file = File::open(file_path).unwrap();
 		let reader = BufReader::new(file);
 		let mut model = BTreeMap::new();
 
 		for line in reader.lines() {
 			let line = line.unwrap();
-			let parts: Vec<&str> = line.split('\t').collect();
-			if parts.len() != 2 {
-				println!("Error: Expected 2 tab-separated values, found {}", parts.len());
-				continue;
-			}
+			let parts: Vec<&str> = line.split('\t').collect(); // Example: ["[0, 0]", "40"]
 
-			let binary_str = parts[0].trim_matches(['[', ']', ' ']);
-			let binary: Vec<u8> = binary_str
-				.split(',')
-				.map(|x| u8::from_str(x).unwrap_or_else(|_err| {
-					println!("Error parsing binary number: {}", x);
-					0 // Use 0 as the default value
-				}))
-				.collect();
-			let value: i32 = parts[1].parse().unwrap_or_else(|_err| {
-				println!("Error parsing integer value: {}", parts[1]);
-				0 // Use 0 as the default value
-			});
+			// Parse the vector part
+			// Example: "[0, 0]"
+			let vector_part = &parts[0][1..parts[0].len()-1]; // Remove the square brackets
+			let vector_elements: Vec<u8> = vector_part.split(',')
+				.map(|s| u8::from_str(s.trim()).unwrap())
+				.collect(); // Example: [0, 0]
 
-			model.insert(binary, value);
+			// Parse the integer part
+			let integer_part = i32::from_str(parts[1]).unwrap(); // Example: 40
+
+			// Insert into the BTreeMap
+			model.insert(vector_elements, integer_part);
 		}
 
 		TokCodec { model }
 	}
 
+	fn from_longest_bytes_iter(&self) -> impl Iterator<Item = (Vec<u8>, i32)> + '_ {
+		let mut mapped: Vec<Vec<u8>> = self.model.iter().map(|(bytes, _)| bytes.clone()).collect();
+		mapped.sort_by_key(|bytes| bytes.len());
+		mapped.into_iter().rev().map(move |bytes| (bytes.clone(), self.model[&bytes]))
+	}
+
 	fn encode(&self, bytes: &[u8]) {
 		// Start with the longest string
+		for (bytes, freq) in self.from_longest_bytes_iter() {
+			println!("Bytes: {:?}, Length: {}, Frequency: {}", bytes, bytes.len(), freq);
+		}
 		unimplemented!()
 	}
 
@@ -60,7 +61,7 @@ impl TokCodec {
 
 pub fn demo() {
 	let model = TokCodec::new("output.vocab.txt");
-	println!("{:?}", model);
+	// println!("{:?}", model);
 	let tokens = model.encode(DEMO_STRING);
 	println!("{:?}", tokens);
 }

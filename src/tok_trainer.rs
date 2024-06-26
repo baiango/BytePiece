@@ -8,6 +8,7 @@ use std::{collections::BTreeMap, cmp::min};
 // Don't use those garbage collection stuffs unless you really need it!
 use std::sync::{Arc, Mutex};
 use rayon::prelude::*;
+use crate::{TokenizerParameters, DBG_LV};
 
 
 #[derive(Debug, PartialEq)]
@@ -33,7 +34,7 @@ impl SumBPE for i16 {}
 impl SumBPE for i32 {}
 
 
-fn train_unigram(byte_vec: &ConcatenatedBytes, dropout: Option<u32>, pre_keyed_map: Option<&BTreeMap<Vec<u8>, i16>>) -> BTreeMap<Vec<u8>, i16> {
+fn train_unigram_bytes(byte_vec: &ConcatenatedBytes, dropout: Option<u32>, pre_keyed_map: Option<&BTreeMap<Vec<u8>, i16>>) -> BTreeMap<Vec<u8>, i16> {
 	fn drop_keys(mut loop_count: u32, dropout: u32, mut counter: BTreeMap<Vec<u8>, i16>) -> (u32, BTreeMap<Vec<u8>, i16>) {
 		loop_count += 1;
 		if loop_count % dropout == 0 {
@@ -174,7 +175,7 @@ fn greedy_bpe_encode(byte: &[u8]) -> BTreeMap<Vec<u8>, i16> {
 	let mut tokenizer_model = BTreeMap::new();
 
 	while !byte_vec.data.is_empty() {
-		let counter = train_unigram(&byte_vec, None, None);
+		let counter = train_unigram_bytes(&byte_vec, None, None);
 		if counter.is_empty() {
 			return tokenizer_model;
 		}
@@ -211,13 +212,13 @@ fn sum_byte_pair_encoding<S: SumBPE>(tokenizer: &BTreeMap<Vec<u8>, i32>, stats: 
 fn train_tokenizer_rayon_multi_threaded(byte_arr: &[u8], chunk_length: usize) -> BTreeMap<Vec<u8>, i32> {
 	// Don't use hyper-threading as it uses twice as much memory for a 5% improvement only
 	let num_physical_cores = num_cpus::get_physical();
-	println!("Will use {} threads", num_physical_cores);
+	if DBG_LV.has_debug() { println!("Will use {} threads", num_physical_cores); }
 	let pool = rayon::ThreadPoolBuilder::new().num_threads(num_physical_cores).build().unwrap();
 
 	let chunks: Vec<&[u8]> = byte_arr.chunks(chunk_length).collect();
 	let group_size = (chunks.len() + num_physical_cores - 1) / num_physical_cores;
 	let groups: Vec<&[&[u8]]> = chunks.chunks(group_size).collect();
-	println!("Chunk length: {} * {}", chunk_length, chunks.len());
+	if DBG_LV.has_debug() { println!("Chunk length: {} * {}", chunk_length, chunks.len()); }
 
 	// Completed; Multi-cores idea: Sum the model within threads,
 	// the memory usage should be limited to the number of threads rather than a vector,
@@ -239,7 +240,7 @@ fn train_tokenizer_rayon_multi_threaded(byte_arr: &[u8], chunk_length: usize) ->
 
 fn train_tokenizer_single_thread(byte_arr: &[u8], chunk_length: usize) -> BTreeMap<Vec<u8>, i32> {
 	let mut tokenizer_model = BTreeMap::new();
-	println!("Will use single thread only");
+	if DBG_LV.has_debug() { println!("Will use single thread only"); }
 	for chunk in byte_arr.chunks(chunk_length) {
 		let line = chunk.to_vec();
 		tokenizer_model = sum_byte_pair_encoding(&tokenizer_model, &greedy_bpe_encode(&line));
@@ -262,17 +263,17 @@ pub fn train_tokenizer(byte_arr: &[u8], chunk_length: Option<usize>, multi_threa
 		.collect()
 }
 
-pub fn demo() {
-	let file = File::open("pexels-pixabay-302743.jpg").expect("Unable to open file");
-	let bytes_to_read = 0xffff_ffff;
+pub fn entry(tok_trainer_args: &mut TokenizerParameters) {
+	let bin_file = tok_trainer_args.bin_file.as_mut().unwrap();
+	let bytes_to_read = tok_trainer_args.bytes_to_read.unwrap_or(u64::MAX);
 
-	let reader = BufReader::new(file);
+	let reader = BufReader::new(bin_file);
 	let mut input = vec![];
 	reader.take(bytes_to_read).read_to_end(&mut input).expect("Unable to read file");
 
-	println!("input size: {}", input.len());
-	let result = train_tokenizer(&input, Some(16), true);
-	println!("greedy_bpe_encode: {:?}, length: {}", result, result.len());
+	if DBG_LV.has_verbose() { println!("file byte size: {}", input.len()); }
+	let result = train_tokenizer(&input, tok_trainer_args.trainer_chk_len, true);
+	if DBG_LV.has_lengthy() { println!("greedy_bpe_encode: {:?}, length: {}", result, result.len()); }
 
 	let mut file = File::create("output.vocab.txt").expect("create failed");
 	for (byte_vec, score) in result {
@@ -280,14 +281,13 @@ pub fn demo() {
 	}
 }
 
-
 #[cfg(test)]
 mod tests {
 	use std::collections::BTreeMap;
 	use crate::tok_trainer::*;
 
 	#[test]
-	fn test_train_unigram() {
+	fn test_train_unigram_bytes() {
 		let byte_vec = ConcatenatedBytes::new(vec![
 				1, 2, 3, 1, 2, 3, 1, 2,
 				3, 1, 2, 3, 1, 2, 3, 1,
@@ -296,7 +296,7 @@ mod tests {
 		);
 
 		let test_dropout = 0x3fff;
-		let counter = train_unigram(&byte_vec, Some(test_dropout), None);
+		let counter = train_unigram_bytes(&byte_vec, Some(test_dropout), None);
 
 		assert_eq!(*counter.get(&vec![1, 2]).unwrap(), 5);
 		assert_eq!(*counter.get(&vec![3, 1]).unwrap(), 5);
@@ -380,7 +380,11 @@ mod tests {
 		let mut input = vec![];
 		reader.take(bytes_to_read).read_to_end(&mut input).expect("Unable to read file");
 
-		train_tokenizer(&input, Some(16), true);
+		let result = train_tokenizer(&input, Some(16), true);
+		let mut file = File::create("output.vocab.txt").expect("create failed");
+		for (byte_vec, score) in result {
+			writeln!(file, "{:?}\t{}", byte_vec, score).expect("write failed");
+		}
 		}
 	}
 }
