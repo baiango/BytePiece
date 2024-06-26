@@ -50,9 +50,10 @@ fn vaildate_parameters(args: &Vec<String>) {
 	let partial_arg_msg = (
 		// Try not to go over 80 characters!
 		format!("Usage: {} [parameter_1,parameter_2..] file\n", args[0])
+		+ "E.g.: tokenizer_trainer_bin v=0b0_1111,br=0x3fff,mt=0 pexels-pixabay-302743.jpg\n"
 		+ "Parameters are separated by commas, non-matches are ignored:\n"
-		+ "  v=        Debug level; supports binary, decimal, hexadecimal,\n"
-		+ "            and combined levels.\n"
+		+ "  v=        Debug level; supports underscores, binary, decimal,\n"
+		+ "            hexadecimal, and combined levels.\n"
 		+ "            E.g., v=0b11 = Include error and warn.\n"
 		+ "            v=0 = Include silent.\n"
 		+ "            v=0b1 = Include error.\n"
@@ -61,8 +62,9 @@ fn vaildate_parameters(args: &Vec<String>) {
 		+ "            v=0b1000 = Include info.\n"
 		+ "            v=0b1_0000 = Include verbose.\n"
 		+ "            v=0b10_0000 = Include lengthy.\n"
-		+ "  br=       Maximum bytes to read from the file..\n"
-		+ "  mt=       Threads to use, 0 to detect system cores count..\n"
+		+ "  br=       Maximum bytes to read from the file.\n"
+		+ "  mt=       Threads to use, 0 to detect system cores count.\n"
+		+ "            None to use single.\n"
 		+ "  tcb=      Training chunk bytes. Around 0(n ** 2 * 256) memory.\n"
 	);
 

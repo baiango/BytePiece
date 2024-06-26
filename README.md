@@ -14,6 +14,25 @@ rayon = "1.10.0" # Use multiple threads
 
 # Usage
 Try out the cmd `cargo r --release -- sz,d,br=0x___________0,ss,v=0b0_1111 pexels-pixabay-302743.jpg`!  
+```
+Usage: target\release\tokenizer_trainer_bin.exe [parameter_1,parameter_2..] file
+E.g.: tokenizer_trainer_bin v=0b0_1111,br=0x3fff,mt=0 pexels-pixabay-302743.jpg
+Parameters are separated by commas, non-matches are ignored:
+  v=        Debug level; supports underscores, binary, decimal,
+            hexadecimal, and combined levels.
+            E.g., v=0b11 = Include error and warn.
+            v=0 = Include silent.
+            v=0b1 = Include error.
+            v=0b10 = Include warn.
+            v=0b100 = Include debug.
+            v=0b1000 = Include info.
+            v=0b1_0000 = Include verbose.
+            v=0b10_0000 = Include lengthy.
+  br=       Maximum bytes to read from the file.
+  mt=       Threads to use, 0 to detect system cores count.
+            None to use single.
+  tcb=      Training chunk bytes. Around 0(n ** 2 * 256) memory.
+```
 
 # Why is this program truly useful❓
 - ✅ Compressing lossy data: You want to understand the pattern of bytes in transform coded then entropy (DCT-II with Huffman coding) compressed files like [JPG](https://en.wikipedia.org/wiki/JPEG#JPEG_codec_example).  
