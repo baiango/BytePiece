@@ -1,14 +1,14 @@
+use std::cmp::min;
 // Use STD only, avoid external dependencies unless it speeds up by 3x!!!!!
 use std::fs::File;
-use std::io::{Read, BufReader};
 use std::io::Write;
 use std::ops::AddAssign;
 use std::panic;
-use std::{collections::BTreeMap, cmp::min};
+use std::collections::BTreeMap;
 // Don't use those garbage collection stuffs unless you really need it!
 use std::sync::{Arc, Mutex};
 use rayon::prelude::*;
-use crate::{TokenizerParameters, DBG_LV};
+use crate::TokenizerParameters;
 
 
 #[derive(Debug, PartialEq)]
@@ -209,16 +209,24 @@ fn sum_byte_pair_encoding<S: SumBPE>(tokenizer: &BTreeMap<Vec<u8>, i32>, stats: 
 	})
 }
 
-fn train_tokenizer_rayon_multi_threaded(byte_arr: &[u8], chunk_length: usize) -> BTreeMap<Vec<u8>, i32> {
+fn train_tokenizer_rayon_multi_threaded(param: &TokenizerParameters) -> BTreeMap<Vec<u8>, i32> {
 	// Don't use hyper-threading as it uses twice as much memory for a 5% improvement only
-	let num_physical_cores = num_cpus::get_physical();
-	if DBG_LV.has_debug() { println!("Will use {} threads", num_physical_cores); }
-	let pool = rayon::ThreadPoolBuilder::new().num_threads(num_physical_cores).build().unwrap();
+	let num_threads = if param.multi_threaded.unwrap() == 0 {
+		let cores = num_cpus::get_physical();
+		if param.has_info() { println!("Info: multi_threaded is 0: Auto assigning {} thread(s)", cores); }
+		cores
+	} else {
+		param.multi_threaded.unwrap()
+	};
+	if param.has_debug() { println!("Debug: Will use {} thread(s)", num_threads); }
+	let pool = rayon::ThreadPoolBuilder::new().num_threads(num_threads).build().unwrap();
 
-	let chunks: Vec<&[u8]> = byte_arr.chunks(chunk_length).collect();
-	let group_size = (chunks.len() + num_physical_cores - 1) / num_physical_cores;
+	let chunk_length = param.trainer_chk_len.unwrap();
+	let bin_vec = param.bin_dat.clone().unwrap();
+	let chunks: Vec<&[u8]> = bin_vec.chunks(chunk_length).collect();
+	let group_size = (chunks.len() + num_threads - 1) / num_threads;
 	let groups: Vec<&[&[u8]]> = chunks.chunks(group_size).collect();
-	if DBG_LV.has_debug() { println!("Chunk length: {} * {}", chunk_length, chunks.len()); }
+	if param.has_debug() { println!("Debug: Chunk length: {} * {}", chunk_length, chunks.len()); }
 
 	// Completed; Multi-cores idea: Sum the model within threads,
 	// the memory usage should be limited to the number of threads rather than a vector,
@@ -238,24 +246,33 @@ fn train_tokenizer_rayon_multi_threaded(byte_arr: &[u8], chunk_length: usize) ->
 	Arc::try_unwrap(tokenizer_model).unwrap().into_inner().unwrap()
 }
 
-fn train_tokenizer_single_thread(byte_arr: &[u8], chunk_length: usize) -> BTreeMap<Vec<u8>, i32> {
+fn train_tokenizer_single_thread(param: &TokenizerParameters) -> BTreeMap<Vec<u8>, i32> {
 	let mut tokenizer_model = BTreeMap::new();
-	if DBG_LV.has_debug() { println!("Will use single thread only"); }
-	for chunk in byte_arr.chunks(chunk_length) {
+	let bin_dat = param.bin_dat.clone().unwrap();
+	let chunks = bin_dat.chunks(param.trainer_chk_len.unwrap());
+
+	if param.has_debug() { println!("Debug: Will use single thread only on {} chunk(s)", chunks.len()); }
+	for chunk in chunks {
 		let line = chunk.to_vec();
 		tokenizer_model = sum_byte_pair_encoding(&tokenizer_model, &greedy_bpe_encode(&line));
 	}
 	tokenizer_model
 }
 
-pub fn train_tokenizer(byte_arr: &[u8], chunk_length: Option<usize>, multi_threaded: bool) -> BTreeMap<Vec<u8>, i32> {
-	let default_chunk_length = 512;
-	let chunk_length = min(chunk_length.unwrap_or(default_chunk_length), byte_arr.len());
+pub fn train_tokenizer(param: &mut TokenizerParameters) -> BTreeMap<Vec<u8>, i32> {
+	param.trainer_chk_len = match param.trainer_chk_len {
+		Some(chunk_length) => Some(chunk_length),
+		None => {
+			let default_chunk_length = min(16, param.bin_dat.clone().unwrap().len());
+			if param.has_info() { println!("Info: chunk_length is None; assigning chunk(s) with length {}", default_chunk_length); }
+			Some(default_chunk_length)
+		}
+	};
 	let tokenizer_model;
-	if multi_threaded {
-		tokenizer_model = train_tokenizer_rayon_multi_threaded(byte_arr, chunk_length)
+	if param.multi_threaded != None {
+		tokenizer_model = train_tokenizer_rayon_multi_threaded(param)
 	} else {
-		tokenizer_model = train_tokenizer_single_thread(byte_arr, chunk_length)
+		tokenizer_model = train_tokenizer_single_thread(param)
 	}
 	tokenizer_model
 		.into_iter()
@@ -264,16 +281,10 @@ pub fn train_tokenizer(byte_arr: &[u8], chunk_length: Option<usize>, multi_threa
 }
 
 pub fn entry(tok_trainer_args: &mut TokenizerParameters) {
-	let bin_file = tok_trainer_args.bin_file.as_mut().unwrap();
-	let bytes_to_read = tok_trainer_args.bytes_to_read.unwrap_or(u64::MAX);
-
-	let reader = BufReader::new(bin_file);
-	let mut input = vec![];
-	reader.take(bytes_to_read).read_to_end(&mut input).expect("Unable to read file");
-
-	if DBG_LV.has_verbose() { println!("file byte size: {}", input.len()); }
-	let result = train_tokenizer(&input, tok_trainer_args.trainer_chk_len, true);
-	if DBG_LV.has_lengthy() { println!("greedy_bpe_encode: {:?}, length: {}", result, result.len()); }
+	let bin_dat = tok_trainer_args.bin_dat.as_ref().unwrap();
+	if tok_trainer_args.has_info() { println!("Info: File byte size: {}", bin_dat.len()); }
+	let result = train_tokenizer(tok_trainer_args);
+	if tok_trainer_args.has_lengthy() { println!("Lengthy: greedy_bpe_encode: {:?}, length: {}", result, result.len()); }
 
 	let mut file = File::create("output.vocab.txt").expect("create failed");
 	for (byte_vec, score) in result {
@@ -283,8 +294,8 @@ pub fn entry(tok_trainer_args: &mut TokenizerParameters) {
 
 #[cfg(test)]
 mod tests {
-	use std::collections::BTreeMap;
-	use crate::tok_trainer::*;
+	use std::{collections::BTreeMap, io::{BufReader, Read}};
+	use crate::{tok_trainer::*, debug_enum};
 
 	#[test]
 	fn test_train_unigram_bytes() {
@@ -364,8 +375,20 @@ mod tests {
 	#[test]
 	fn test_train_tokenizer() {
 		{ // This will test every functions in the trainer to ensure it won't crash
-		let result_too_short = train_tokenizer(&b"a".to_vec(), Some(2), true);
-		let result = train_tokenizer(&b"abcdabcc".to_vec(), None, false);
+		let result_too_short = train_tokenizer(&mut TokenizerParameters {
+			multi_threaded: Some(2),
+			dbg_lv: debug_enum::DEBUG,
+			bin_dat: Some(b"a".to_vec()),
+			bytes_to_read: None,
+			trainer_chk_len: Some(2),
+		});
+		let result = train_tokenizer(&mut TokenizerParameters {
+			multi_threaded: Some(2),
+			dbg_lv: debug_enum::DEBUG,
+			bin_dat: Some(b"abcdabcc".to_vec()),
+			bytes_to_read: None,
+			trainer_chk_len: None,
+		});
 
 		assert_eq!(result_too_short, BTreeMap::new());
 		let mut expected = BTreeMap::new();
@@ -380,7 +403,13 @@ mod tests {
 		let mut input = vec![];
 		reader.take(bytes_to_read).read_to_end(&mut input).expect("Unable to read file");
 
-		let result = train_tokenizer(&input, Some(16), true);
+		let result = train_tokenizer(&mut TokenizerParameters {
+			multi_threaded: Some(num_cpus::get_physical()),
+			dbg_lv: debug_enum::DEBUG,
+			bin_dat: Some(input),
+			bytes_to_read: None,
+			trainer_chk_len: Some(16),
+		});
 		let mut file = File::create("output.vocab.txt").expect("create failed");
 		for (byte_vec, score) in result {
 			writeln!(file, "{:?}\t{}", byte_vec, score).expect("write failed");

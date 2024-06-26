@@ -5,24 +5,23 @@ A [SentencePiece](https://github.com/google/sentencepiece) imitation. This is an
 - TLDR: Get [Visual Studio C++ Build tools](https://www.rust-lang.org/learn/get-started), and install [Rust](https://www.rust-lang.org/learn/get-started), then run `cargo r --release` in the project's directory.
 1.	[A Visual Studio C++ Build tools installation](https://www.rust-lang.org/learn/get-started)  
 2.	[A Rust installation](https://www.rust-lang.org/learn/get-started)  
-3.	See the [Cargo.toml](Cargo.toml) for more. It'll be installed by Cargo from Rust automatically.  
+3.	See the [Cargo.toml](Cargo.toml) for more. They'll be installed by Cargo automatically.  
 ```
 [dependencies]
 num_cpus = "1.16.0" # To see how many cores the system has
 rayon = "1.10.0" # Use multiple threads
 ```
 
-# Why is this program useful❓
+# Usage
+Try out the cmd `cargo r --release -- sz,d,br=0x___________0,ss,v=0b0_1111 pexels-pixabay-302743.jpg`!  
+
+# Why is this program truly useful❓
 - ✅ Compressing lossy data: You want to understand the pattern of bytes in transform coded then entropy (DCT-II with Huffman coding) compressed files like [JPG](https://en.wikipedia.org/wiki/JPEG#JPEG_codec_example).  
 - ✅ Portable and precise data types: All source files are treated as a namespace, which is quite independent of local and external libraries, this means most source code files don't depend on each other. This program is precise in its data types due to Rust, that's why it's easily ported to another mid-level abstraction language like C and C++.  
 - ✅ Complies in a few clicks or `cargo r --release`: This program is written in Rust, so it won't leak and maximize memory uses.  
 - ✅ Real-world automated testing: This algorithm comes with automated unit testing on a lightweight [clear glass sphere](pexels-pixabay-302743.jpg) JPG encoded image to test the edge case. It's sapient and dependable because of side-effectless functions, so it won't crash on your computer but only on the maintainer's. Rest assured this is safe.  
-- ✅ Runs on all cores: This program took 29 lines to run the trainer in all cores with Rayon. Say goodbye to nine cores watching when one core is distressed!
+- ✅ Runs on all cores: This program took 29 lines to run the trainer in all cores with Rayon. Say goodbye to nine cores watching when one core is distressed!  
 
 # Why not this program❓
 - ❎ Ignores the boundaries: This is not your LLM (Large language model) tokenizer, such as [tokenizers](https://github.com/huggingface/tokenizers) replacement. And, this tokenizes at byte level rather than subword level, so it may make training your LLM models much more difficult because it ignores the boundaries of the words or characters like space.  
 - ❎ Memory size and bandwidth heavy but scalable: This algorithm depends on `BTreeMap<Vec<u8>, i16>` to store the keys in O(n^2) time. Training an 8 KiB chunk takes 16 GiB+ (n ** 2 * 256) of memory. But, this can scale down to 256 bytes of memory with a 1 byte chunk. Without dropping out keys of memory optimization, this algorithm can only handle 3 KiB chunks on a 24 GiB of memory system.  
-
-<!---
-# Usage
--->
