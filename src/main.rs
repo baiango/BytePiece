@@ -7,7 +7,7 @@ mod debug_enum {
 #![allow(dead_code)]
 	pub const SILENT: u8 = 0;
 	pub const ERROR: u8 = 0b1;
-	pub const WARNING: u8 = 0b10;
+	pub const WARN: u8 = 0b10;
 	pub const DEBUG: u8 = 0b100;
 	pub const INFO: u8 = 0b1000;
 	pub const VERBOSE: u8 = 0b1_0000;
@@ -30,7 +30,7 @@ pub struct TokenizerParameters {
 	pub dbg_lv: u8,
 	pub bin_dat: Option<Vec<u8>>,
 	pub bytes_to_read: Option<u64>,
-	pub trainer_chk_len: Option<usize>,
+	pub trainer_chk_bytes: Option<usize>,
 }
 
 impl TokenizerParameters {
@@ -38,6 +38,7 @@ impl TokenizerParameters {
 	impl_has_checks! {
 		has_silent => debug_enum::SILENT,
 		has_error => debug_enum::ERROR,
+		has_warn => debug_enum::WARN,
 		has_debug => debug_enum::DEBUG,
 		has_info => debug_enum::INFO,
 		has_verbose => debug_enum::VERBOSE,
@@ -46,17 +47,34 @@ impl TokenizerParameters {
 }
 
 fn vaildate_parameters(args: &Vec<String>) {
-	let partial_arg_err_msg = format!("Usage: {} [parameter_1,parameter_2..] file\n", args[0]);
+	let partial_arg_msg = (
+		// Try not to go over 80 characters!
+		format!("Usage: {} [parameter_1,parameter_2..] file\n", args[0])
+		+ "Parameters are separated by commas, non-matches are ignored:\n"
+		+ "  v=        Debug level; supports binary, decimal, hexadecimal,\n"
+		+ "            and combined levels.\n"
+		+ "            E.g., v=0b11 = Include error and warn.\n"
+		+ "            v=0 = Include silent.\n"
+		+ "            v=0b1 = Include error.\n"
+		+ "            v=0b10 = Include warn.\n"
+		+ "            v=0b100 = Include debug.\n"
+		+ "            v=0b1000 = Include info.\n"
+		+ "            v=0b1_0000 = Include verbose.\n"
+		+ "            v=0b10_0000 = Include lengthy.\n"
+		+ "  br=       Maximum bytes to read from the file..\n"
+		+ "  mt=       Threads to use, 0 to detect system cores count..\n"
+		+ "  tcb=      Training chunk bytes. Around 0(n ** 2 * 256) memory.\n"
+	);
 
 	if args.len() >= 4 {
-		eprintln!("{}Hint: Please give 3 parameters. I received {} parameters: {:?}", partial_arg_err_msg, args.len(), args);
-		return;
+		eprintln!("{}Hint: Please give 3 parameters; received {} parameters: {:?}", partial_arg_msg, args.len(), args);
+		std::process::exit(1);
 	} else if args.len() == 2 {
-		eprintln!("{}Hint: Please specify the input file path.", partial_arg_err_msg);
-		return;
+		eprintln!("{}Hint: Please specify the input file path.", partial_arg_msg);
+		std::process::exit(1);
 	} else if args.len() == 1 {
-		eprintln!("{}Hint: Please specify options.", partial_arg_err_msg);
-		return;
+		eprintln!("{}Hint: Please specify options.", partial_arg_msg);
+		std::process::exit(1);
 	}
 }
 
@@ -69,7 +87,7 @@ fn read_file(file_path: &String, bytes_to_read: Option<u64>) -> Option<Vec<u8>> 
 			eprintln!("Unable to open {}: {}", file_path, error);
 			let dir_path = Path::new(file_path).parent().unwrap();
 			if dir_path.exists() || dir_path.to_str().unwrap() == "" {
-				eprintln!("Hint: Check the file name: {:?}", file_path);
+				eprintln!("Hint: Found the directory; check the file name: {:?}", file_path);
 			} else {
 				eprintln!("Hint: Check the directory {:?}", dir_path);
 			}
@@ -131,23 +149,24 @@ fn process_cmd() {
 		dbg_lv: 0,
 		bin_dat: None,
 		bytes_to_read: None,
-		trainer_chk_len: Some(16),
+		trainer_chk_bytes: Some(16),
 		multi_threaded: None,
 	};
 	let parameters: Vec<String> = env::args().collect();
+	vaildate_parameters(&parameters);
+
 	let options = parameters[1].split(",").collect::<Vec<&str>>();
-	tok_parameters.dbg_lv = parse_uint(&options, "v=").unwrap_or(debug_enum::SILENT);
 	tok_parameters.bin_dat = read_file(&parameters[2], tok_parameters.bytes_to_read);
+	tok_parameters.dbg_lv = parse_uint(&options, "v=").unwrap_or(debug_enum::SILENT);
 	tok_parameters.bytes_to_read = parse_uint(&options, "br=");
-	tok_parameters.multi_threaded = parse_uint(&options, "br=");
-	tok_parameters.trainer_chk_len = min(
-		parse_uint(&options, "tcl="),
+	tok_parameters.multi_threaded = parse_uint(&options, "mt=");
+	tok_parameters.trainer_chk_bytes = min(
+		parse_uint(&options, "tcb="),
 		Some(tok_parameters.bin_dat.clone().unwrap().len())
 	);
 
 	if tok_parameters.has_verbose() { println!("Verbose: args: {:?}", parameters); }
 	if tok_parameters.has_verbose() { println!("Verbose: options: {:?}", options); }
-	vaildate_parameters(&parameters);
 
 	tok_trainer::entry(&mut tok_parameters);
 	// tok_codec::demo();

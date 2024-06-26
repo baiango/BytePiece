@@ -221,7 +221,7 @@ fn train_tokenizer_rayon_multi_threaded(param: &TokenizerParameters) -> BTreeMap
 	if param.has_debug() { println!("Debug: Will use {} thread(s)", num_threads); }
 	let pool = rayon::ThreadPoolBuilder::new().num_threads(num_threads).build().unwrap();
 
-	let chunk_length = param.trainer_chk_len.unwrap();
+	let chunk_length = param.trainer_chk_bytes.unwrap();
 	let bin_vec = param.bin_dat.clone().unwrap();
 	let chunks: Vec<&[u8]> = bin_vec.chunks(chunk_length).collect();
 	let group_size = (chunks.len() + num_threads - 1) / num_threads;
@@ -249,7 +249,7 @@ fn train_tokenizer_rayon_multi_threaded(param: &TokenizerParameters) -> BTreeMap
 fn train_tokenizer_single_thread(param: &TokenizerParameters) -> BTreeMap<Vec<u8>, i32> {
 	let mut tokenizer_model = BTreeMap::new();
 	let bin_dat = param.bin_dat.clone().unwrap();
-	let chunks = bin_dat.chunks(param.trainer_chk_len.unwrap());
+	let chunks = bin_dat.chunks(param.trainer_chk_bytes.unwrap());
 
 	if param.has_debug() { println!("Debug: Will use single thread only on {} chunk(s)", chunks.len()); }
 	for chunk in chunks {
@@ -260,7 +260,7 @@ fn train_tokenizer_single_thread(param: &TokenizerParameters) -> BTreeMap<Vec<u8
 }
 
 pub fn train_tokenizer(param: &mut TokenizerParameters) -> BTreeMap<Vec<u8>, i32> {
-	param.trainer_chk_len = match param.trainer_chk_len {
+	param.trainer_chk_bytes = match param.trainer_chk_bytes {
 		Some(chunk_length) => Some(chunk_length),
 		None => {
 			let default_chunk_length = min(16, param.bin_dat.clone().unwrap().len());
@@ -380,14 +380,14 @@ mod tests {
 			dbg_lv: debug_enum::DEBUG,
 			bin_dat: Some(b"a".to_vec()),
 			bytes_to_read: None,
-			trainer_chk_len: Some(2),
+			trainer_chk_bytes: Some(2),
 		});
 		let result = train_tokenizer(&mut TokenizerParameters {
 			multi_threaded: Some(2),
 			dbg_lv: debug_enum::DEBUG,
 			bin_dat: Some(b"abcdabcc".to_vec()),
 			bytes_to_read: None,
-			trainer_chk_len: None,
+			trainer_chk_bytes: None,
 		});
 
 		assert_eq!(result_too_short, BTreeMap::new());
@@ -408,7 +408,7 @@ mod tests {
 			dbg_lv: debug_enum::DEBUG,
 			bin_dat: Some(input),
 			bytes_to_read: None,
-			trainer_chk_len: Some(16),
+			trainer_chk_bytes: Some(16),
 		});
 		let mut file = File::create("output.vocab.txt").expect("create failed");
 		for (byte_vec, score) in result {
