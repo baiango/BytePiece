@@ -44,3 +44,8 @@ Parameters are separated by commas, non-matches are ignored:
 # 🗿 Why not this program❓
 - ❎ Ignores the boundaries: This is not your LLM (Large language model) tokenizer, such as [tokenizers](https://github.com/huggingface/tokenizers) replacement. And, this tokenizes at byte level rather than subword level, so it may make training your LLM models much more difficult because it ignores the boundaries of the words or characters like space.  
 - ❎ Memory size and bandwidth heavy but scalable: This algorithm depends on `BTreeMap<Vec<u8>, i16>` to store the keys in O(n^2) time. Training an 8 KiB chunk takes 16 GiB+ (n ** 2 * 256) of memory. But, this can scale down to 256 bytes of memory with a 1 byte chunk. Without dropping out keys of memory optimization, this algorithm can only handle 3 KiB chunks on a 24 GiB of memory system.  
+
+# ©️ License
+All code in this repository belongs to no one: [Unlicense](UNLICENSE).  
+[pexels-pixabay-302743.jpg](pexels-pixabay-302743.jpg) is placed under the same license [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) without additional restrictions.  
+I'll hold no liability for misuse of BytePiece. You are welcome to do anything legally with BytePiece.  
