@@ -20,19 +20,17 @@ impl TokCodec {
 
 		for line in reader.lines() {
 			let line = line.unwrap();
-			let parts: Vec<&str> = line.split('\t').collect(); // Example: ["[0, 0]", "40"]
+			let parts: Vec<&str> = line.split('\t').collect(); // E.g.: ["[0, 0]", "40"]
 
-			// Parse the vector part
-			// Example: "[0, 0]"
-			let vector_part = &parts[0][1..parts[0].len()-1]; // Remove the square brackets
+			// E.g.: "[0, 0]"
+			let vector_part = &parts[0][1..parts[0].len()-1]; // E.g.: "0, 0"
 			let vector_elements: Vec<u8> = vector_part.split(',')
-				.map(|s| u8::from_str(s.trim()).unwrap())
-				.collect(); // Example: [0, 0]
+				.map(|s| s.trim())
+				.map(|s| u8::from_str(s).unwrap())
+				.collect(); // E.g.: [0, 0]
 
-			// Parse the integer part
-			let integer_part = i32::from_str(parts[1]).unwrap(); // Example: 40
+			let integer_part = i32::from_str(parts[1]).unwrap(); // E.g.: 40
 
-			// Insert into the BTreeMap
 			model.insert(vector_elements, integer_part);
 		}
 

@@ -1,5 +1,5 @@
-use std::cmp::min;
 // Use STD only, avoid external dependencies unless it speeds up by 3x!!!!!
+use std::cmp::min;
 use std::fs::File;
 use std::io::Write;
 use std::ops::AddAssign;
@@ -269,10 +269,10 @@ pub fn train_tokenizer(param: &mut TokenizerParameters) -> BTreeMap<Vec<u8>, i32
 		}
 	};
 	let tokenizer_model;
-	if param.multi_threaded != None {
-		tokenizer_model = train_tokenizer_rayon_multi_threaded(param)
-	} else {
+	if None == param.multi_threaded || 1 == param.multi_threaded.unwrap() {
 		tokenizer_model = train_tokenizer_single_thread(param)
+	} else {
+		tokenizer_model = train_tokenizer_rayon_multi_threaded(param)
 	}
 	tokenizer_model
 		.into_iter()
@@ -295,7 +295,7 @@ pub fn entry(tok_trainer_args: &mut TokenizerParameters) {
 #[cfg(test)]
 mod tests {
 	use std::{collections::BTreeMap, io::{BufReader, Read}};
-	use crate::{tok_trainer::*, debug_enum};
+	use crate::{tok_trainer::*, debug_enum, tokenizer_mode};
 
 	#[test]
 	fn test_train_unigram_bytes() {
@@ -376,6 +376,7 @@ mod tests {
 	fn test_train_tokenizer() {
 		{ // This will test every functions in the trainer to ensure it won't crash
 		let result_too_short = train_tokenizer(&mut TokenizerParameters {
+			mode: tokenizer_mode::NONE,
 			multi_threaded: Some(2),
 			dbg_lv: debug_enum::DEBUG,
 			bin_dat: Some(b"a".to_vec()),
@@ -383,6 +384,7 @@ mod tests {
 			trainer_chk_bytes: Some(2),
 		});
 		let result = train_tokenizer(&mut TokenizerParameters {
+			mode: tokenizer_mode::NONE,
 			multi_threaded: Some(2),
 			dbg_lv: debug_enum::DEBUG,
 			bin_dat: Some(b"abcdabcc".to_vec()),
@@ -404,6 +406,7 @@ mod tests {
 		reader.take(bytes_to_read).read_to_end(&mut input).expect("Unable to read file");
 
 		let result = train_tokenizer(&mut TokenizerParameters {
+			mode: tokenizer_mode::NONE,
 			multi_threaded: Some(num_cpus::get_physical()),
 			dbg_lv: debug_enum::DEBUG,
 			bin_dat: Some(input),

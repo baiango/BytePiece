@@ -4,14 +4,30 @@ use std::{env, fs::File, path::Path, io::{BufReader, Read}, cmp::min};
 
 
 mod debug_enum {
-#![allow(dead_code)]
-	pub const SILENT: u8 = 0;
-	pub const ERROR: u8 = 0b1;
-	pub const WARN: u8 = 0b10;
-	pub const DEBUG: u8 = 0b100;
-	pub const INFO: u8 = 0b1000;
-	pub const VERBOSE: u8 = 0b1_0000;
-	pub const LENGTHY: u8 = 0b10_0000;
+	pub const SILENT: u8 = 1;
+	pub const ERROR: u8 = 0b10;
+	pub const WARN: u8 = 0b100;
+	pub const DEBUG: u8 = 0b1000;
+	pub const INFO: u8 = 0b1_0000;
+	pub const VERBOSE: u8 = 0b10_0000;
+	pub const LENGTHY: u8 = 0b100_0000;
+}
+
+mod tokenizer_mode {
+	pub const NONE: u8 = 0;
+	pub const TRAIN: u8 = 1;
+	pub const ENCODE: u8 = 2;
+	pub const DECODE: u8 = 3;
+}
+
+#[derive(Debug)]
+pub struct TokenizerParameters {
+	mode: u8,
+	dbg_lv: u8,
+	bin_dat: Option<Vec<u8>>,
+	bytes_to_read: Option<u64>,
+	multi_threaded: Option<usize>,
+	trainer_chk_bytes: Option<usize>,
 }
 
 macro_rules! impl_has_checks {
@@ -24,17 +40,29 @@ macro_rules! impl_has_checks {
 	}
 }
 
-#[derive(Debug)]
-pub struct TokenizerParameters {
-	multi_threaded: Option<usize>,
-	pub dbg_lv: u8,
-	pub bin_dat: Option<Vec<u8>>,
-	pub bytes_to_read: Option<u64>,
-	pub trainer_chk_bytes: Option<usize>,
+macro_rules! impl_is_equal {
+	($($name:ident => $value:expr),*) => {
+		$(
+			fn $name(&self) -> bool {
+				self.dbg_lv == $value
+			}
+		)*
+	}
 }
 
 impl TokenizerParameters {
 	#![allow(dead_code)]
+	fn new() -> Self {
+		TokenizerParameters {
+			mode: 0,
+			dbg_lv: 0b1_1111,
+			bin_dat: None,
+			bytes_to_read: None,
+			multi_threaded: None,
+			trainer_chk_bytes: Some(16),
+		}
+	}
+
 	impl_has_checks! {
 		has_silent => debug_enum::SILENT,
 		has_error => debug_enum::ERROR,
@@ -44,24 +72,31 @@ impl TokenizerParameters {
 		has_verbose => debug_enum::VERBOSE,
 		has_lengthy => debug_enum::LENGTHY
 	}
+
+	impl_is_equal! {
+		is_none => tokenizer_mode::NONE,
+		is_train => tokenizer_mode::TRAIN,
+		is_encode => tokenizer_mode::ENCODE,
+		is_decode => tokenizer_mode::DECODE
+	}
 }
 
 fn vaildate_parameters(args: &Vec<String>) {
 	let partial_arg_msg = (
-		// Try not to go over 80 characters!
+		// Try not to go over 80 characters and 24 lines!
 		format!("Usage: {} [parameter_1,parameter_2..] file\n", args[0])
 		+ "E.g.: tokenizer_trainer_bin v=0b0_1111,br=0x3fff,mt=0 pexels-pixabay-302743.jpg\n"
 		+ "Parameters are separated by commas, non-matches are ignored:\n"
 		+ "  v=        Debug level; supports underscores, binary, decimal,\n"
 		+ "            hexadecimal, and combined levels.\n"
 		+ "            E.g., v=0b11 = Include error and warn.\n"
-		+ "            v=0 = Include silent.\n"
-		+ "            v=0b1 = Include error.\n"
-		+ "            v=0b10 = Include warn.\n"
-		+ "            v=0b100 = Include debug.\n"
-		+ "            v=0b1000 = Include info.\n"
-		+ "            v=0b1_0000 = Include verbose.\n"
-		+ "            v=0b10_0000 = Include lengthy.\n"
+		+ "            v=1 = Include silent.\n"
+		+ "            v=0b10 = Include error.\n"
+		+ "            v=0b100 = Include warn.\n"
+		+ "            v=0b1000 = Include debug.\n"
+		+ "            v=0b10000 = Include info.\n"
+		+ "            v=0b1_00000 = Include verbose.\n"
+		+ "            v=0b10_00000 = Include lengthy.\n"
 		+ "  br=       Maximum bytes to read from the file.\n"
 		+ "  mt=       Threads to use, 0 to detect system cores count.\n"
 		+ "            None to use single.\n"
@@ -147,31 +182,32 @@ fn parse_uint<T: ParseUInt + std::str::FromStr>(options: &Vec<&str>, starts_with
 }
 
 fn process_cmd() {
-	let mut tok_parameters = TokenizerParameters {
-		dbg_lv: 0,
-		bin_dat: None,
-		bytes_to_read: None,
-		trainer_chk_bytes: Some(16),
-		multi_threaded: None,
-	};
+	let mut tok_parameters = TokenizerParameters::new();
 	let parameters: Vec<String> = env::args().collect();
 	vaildate_parameters(&parameters);
 
 	let options = parameters[1].split(",").collect::<Vec<&str>>();
 	tok_parameters.bin_dat = read_file(&parameters[2], tok_parameters.bytes_to_read);
-	tok_parameters.dbg_lv = parse_uint(&options, "v=").unwrap_or(debug_enum::SILENT);
+	tok_parameters.dbg_lv = parse_uint(&options, "v=").unwrap_or(0b1_1111);
 	tok_parameters.bytes_to_read = parse_uint(&options, "br=");
 	tok_parameters.multi_threaded = parse_uint(&options, "mt=");
 	tok_parameters.trainer_chk_bytes = min(
 		parse_uint(&options, "tcb="),
 		Some(tok_parameters.bin_dat.clone().unwrap().len())
 	);
+	// tok_parameters.mode = t, e ,d // t=train, e=encode, d=decode
 
 	if tok_parameters.has_verbose() { println!("Verbose: args: {:?}", parameters); }
 	if tok_parameters.has_verbose() { println!("Verbose: options: {:?}", options); }
 
-	tok_trainer::entry(&mut tok_parameters);
-	// tok_codec::demo();
+	if tok_parameters.is_train() {
+		tok_trainer::entry(&mut tok_parameters);
+	} else if tok_parameters.is_encode() {
+		tok_codec::demo();
+	} else if tok_parameters.is_none() {
+		eprintln!("No mode is specified; exiting the program.");
+		std::process::exit(1);
+	}
 }
 
 fn main() {
