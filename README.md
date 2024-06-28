@@ -24,3 +24,14 @@ Skip step 1 and 2 if you're on Linux.
 All code in this repository belongs to no one: [Unlicense](UNLICENSE).  
 [pexels-pixabay-302743.jpg](pexels-pixabay-302743.jpg) is placed under the same license [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) without additional restrictions.  
 I'll hold no liability for misuse of BytePiece. You are welcome to do anything legally with BytePiece.  
+
+# 🤔 Debugging the program
+1.	GDB debugger installation  
+	-	`scoop install gdb`  
+	-	To debug: `gdb --batch -ex run output/bytepiece`  
+2.	[Cppcheck static analyzer](https://cppcheck.net/) installation
+	-	[Download setup msi at Github](https://github.com/danmar/cppcheck/releases/) or `sudo apt-get install cppcheck` on Linux.  
+	-	To debug: `Ctrl+Shift+O` to open a project file and select [bytepiece.cppcheck](bytepiece.cppcheck).  
+3.	Clang static analyzer installation  
+	-	`scoop install llvm`  
+	-	To debug: `clang -Wall --analyze src/main.c`  

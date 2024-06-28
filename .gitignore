@@ -1,1 +1,3 @@
 /.vscode
+/bytepiece-cppcheck-build-dir
+main.plist
