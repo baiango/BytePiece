@@ -4,5 +4,6 @@ void train_unigram_bytes() {
 	
 }
 
-int test() {
+int test_train_unigram_bytes() {
+	return 0;
 }

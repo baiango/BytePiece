@@ -1,7 +1,9 @@
 import subprocess
 import os
+import glob
 
-c_file = "src/main.c"
+
+c_file = glob.glob("src/*.c")
 program_name = "bytepiece"
 output_folder = f"./output/{program_name}"
 optimized_program = True
@@ -24,12 +26,12 @@ if not os.path.exists('output'):
 	os.makedirs('output')
 
 # Too large to read the ASM
-# subprocess.run(["gcc", c_file, "-S", *flags, f"-o{output_folder}.asm"], capture_output=True, text=True)
+# subprocess.run(["gcc", *c_file, "-S", *flags, f"-o{output_folder}.asm"], capture_output=True, text=True)
 
-gcc_result = subprocess.run(["gcc", c_file, *flags, f"-o{output_folder}.exe"], capture_output=True, text=True)
+gcc_result = subprocess.run(["gcc", *c_file, *flags, f"-o{output_folder}.exe"], capture_output=True, text=True)
 print("gcc stderr:", gcc_result.stderr)
 
-clang_result = subprocess.run(["clang", "-Wall", "--analyze", c_file], capture_output=True, text=True)
+clang_result = subprocess.run(["clang", "-Wall", "--analyze", *c_file], capture_output=True, text=True)
 print("clang stderr:", clang_result.stderr)
 
 

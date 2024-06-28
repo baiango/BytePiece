@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include "stle.c"
+#include "stle.h"
 #include "tok_trainer.h"
 
 
