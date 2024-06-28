@@ -5,6 +5,37 @@
 #include <stdlib.h>
 
 
+#define IMPL_MIN_MAX(type) \
+type type##_min(type a, type b) { \
+	return a < b ? a : b; \
+} \
+ \
+type type##_max(type a, type b) { \
+	return a > b ? a : b; \
+} \
+ \
+mut_##type mut_##type##_min(mut_##type a, mut_##type b) { \
+	return a < b ? a : b; \
+} \
+ \
+mut_##type mut_##type##_max(mut_##type a, mut_##type b) { \
+	return a > b ? a : b; \
+}
+
+IMPL_MIN_MAX(i8)
+IMPL_MIN_MAX(i16)
+IMPL_MIN_MAX(i32)
+IMPL_MIN_MAX(i64)
+
+IMPL_MIN_MAX(u8)
+IMPL_MIN_MAX(u16)
+IMPL_MIN_MAX(u32)
+IMPL_MIN_MAX(u64)
+
+IMPL_MIN_MAX(f32)
+IMPL_MIN_MAX(f64)
+
+
 TrieNode *stle_trie_new() {
 	TrieNode *root = (TrieNode *)malloc(sizeof(TrieNode));
 
@@ -19,54 +50,55 @@ TrieNode *stle_trie_new() {
 	return root;
 }
 
-void stle_trie_insert_key(TrieNode *crawl_node, i8 *key) {
+ErrorCode stle_trie_insert_key(TrieNode *current_node, i8 *key) {
 	u32 key_len = strlen(key);
 
-	for (mut_u8 level = 0; level < key_len; level++) {
-		u8 index = key[level];
+	for (mut_u8 depth = 0; depth < key_len; depth++) {
+		u8 index = key[depth];
 
-		if (!crawl_node->children[index]) {
-			crawl_node->children[index] = stle_trie_new();
+		if (!current_node->children[index]) {
+			current_node->children[index] = stle_trie_new();
 		}
 
-		crawl_node = crawl_node->children[index];
+		current_node = current_node->children[index];
 	}
 
-	crawl_node->is_end_of_word = true;
+	current_node->is_end_of_word = true;
+	return OK;
 }
 
-u1 stle_trie_search(TrieNode *crawl_node, i8 *key) {
+u1 stle_trie_search(TrieNode *current_node, i8 *key) {
 	u32 length = strlen(key);
 
-	for (mut_u8 level = 0; level < length; level++) {
-		i32 index = key[level];
+	for (mut_u8 depth = 0; depth < length; depth++) {
+		i32 index = key[depth];
 
-		if (!crawl_node->children[index]) {
+		if (!current_node->children[index]) {
 			return false;
 		}
 
-		crawl_node = crawl_node->children[index];
+		current_node = current_node->children[index];
 	}
 
-	return (EMPTY_TRIE != crawl_node && crawl_node->is_end_of_word);
+	return (EMPTY_TRIE != current_node && current_node->is_end_of_word);
 }
 
-i32 stle_read_file(i8 file_path[], mut_i8 **data) {
+ErrorCode stle_read_file(i8 file_path[], u32 bytes_to_read, mut_i8 **data) {
 	FILE *file = fopen(file_path, "r");
 	if (file == NULL) {
-		return -1;
+		return FILE_NOT_FOUND;
 	}
 
 	// Get the size of the file
 	fseek(file, 0, SEEK_END);
-	u32 file_size = ftell(file);
+	u32 file_size = u32_min(ftell(file), bytes_to_read);
 	rewind(file);
 
 	// Allocate enough memory to hold the contents of the file
 	*data = malloc((file_size + 1) * sizeof(i8));
 	if (*data == NULL) {
 		fclose(file);
-		return -2;
+		return MALLOC_ERR;
 	}
 
 	// Copy the contents of the file into the buffer
@@ -82,10 +114,10 @@ i32 stle_read_file(i8 file_path[], mut_i8 **data) {
 	// Close the file
 	fclose(file);
 
-	return 0;
+	return OK;
 }
 
-i32 test_stle_trie() {
+ErrorCode test_stle_trie() {
 	TrieNode *root = stle_trie_new();
 
 	stle_trie_insert_key(root, "hello");
@@ -96,24 +128,24 @@ i32 test_stle_trie() {
 	printf("Trie \"world\": %s, ", stle_trie_search(root, "world") ? "Found" : "Not Found");
 	printf("Trie \"hi\": %s\n", stle_trie_search(root, "hi") ? "Found" : "Not Found");
 
-	return 0;
+	return OK;
 }
 
-i32 test_stle_read_file() {
+ErrorCode test_stle_read_file() {
 	i8 file_path[] = "src/main.c";
 	mut_i8 *data;
-	if (stle_read_file(file_path, &data) != 0) {
+	if (stle_read_file(file_path, 0xfff, &data) != OK) {
 		printf("Failed to read file %s!\n", file_path);
-		return 1;
+		return FILE_NOT_FOUND;
 	}
 
 	printf("%s", data);
 	free(data);
-	return 0;
+	return OK;
 }
 
-i32 test_modules() {
-	mut_i32 result = 0;
+ErrorCode test_modules() {
+	ErrorCode result = OK;
 	result += test_stle_read_file();
 	result += test_stle_trie();
 	return result;
