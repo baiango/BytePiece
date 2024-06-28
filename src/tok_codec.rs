@@ -3,6 +3,8 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::str::FromStr;
 
+use crate::TokenizerParameters;
+
 
 const DEMO_STRING: &[u8] = b"The quick brown fox jumps over the lazy dog.";
 
@@ -57,7 +59,7 @@ impl TokCodec {
 }
 
 
-pub fn demo() {
+pub fn demo(param: &TokenizerParameters) {
 	let model = TokCodec::new("output.vocab.txt");
 	// println!("{:?}", model);
 	let tokens = model.encode(DEMO_STRING);

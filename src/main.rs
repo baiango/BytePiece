@@ -44,7 +44,7 @@ macro_rules! impl_is_equal {
 	($($name:ident => $value:expr),*) => {
 		$(
 			fn $name(&self) -> bool {
-				self.dbg_lv == $value
+				self.mode == $value
 			}
 		)*
 	}
@@ -84,8 +84,9 @@ impl TokenizerParameters {
 fn vaildate_parameters(args: &Vec<String>) {
 	let partial_arg_msg = (
 		// Try not to go over 80 characters and 24 lines!
-		format!("Usage: {} [parameter_1,parameter_2..] file\n", args[0])
+		format!("Usage: {} t/e/d [parameter_1,parameter_2..] file\n", args[1])
 		+ "E.g.: tokenizer_trainer_bin v=0b0_1111,br=0x3fff,mt=0 pexels-pixabay-302743.jpg\n"
+		+ "Mode: t = Train, e = Encode, d = Decode\n"
 		+ "Parameters are separated by commas, non-matches are ignored:\n"
 		+ "  v=        Debug level; supports underscores, binary, decimal,\n"
 		+ "            hexadecimal, and combined levels.\n"
@@ -103,14 +104,17 @@ fn vaildate_parameters(args: &Vec<String>) {
 		+ "  tcb=      Training chunk bytes. Around 0(n ** 2 * 256) memory.\n"
 	);
 
-	if args.len() >= 4 {
-		eprintln!("{}Hint: Please give 3 parameters; received {} parameters: {:?}", partial_arg_msg, args.len(), args);
+	if args.len() >= 5 {
+		eprintln!("{}Hint: Please give 4 parameters; received {} parameters: {:?}", partial_arg_msg, args.len(), args);
 		std::process::exit(1);
-	} else if args.len() == 2 {
+	} else if args.len() == 3 {
 		eprintln!("{}Hint: Please specify the input file path.", partial_arg_msg);
 		std::process::exit(1);
-	} else if args.len() == 1 {
+	} else if args.len() == 2 {
 		eprintln!("{}Hint: Please specify options.", partial_arg_msg);
+		std::process::exit(1);
+	} else if args.len() == 1 {
+		eprintln!("{}Hint: Please specify mode.", partial_arg_msg);
 		std::process::exit(1);
 	}
 }
@@ -181,13 +185,25 @@ fn parse_uint<T: ParseUInt + std::str::FromStr>(options: &Vec<&str>, starts_with
 	None
 }
 
+fn set_mode(parameters: &Vec<String>) -> u8 {
+	if "t" == parameters[1] {
+		return tokenizer_mode::TRAIN;
+	} else if "e" == parameters[1] {
+		return tokenizer_mode::ENCODE;
+	} else if "d" == parameters[1] {
+		return tokenizer_mode::DECODE;
+	}
+	tokenizer_mode::NONE
+}
+
 fn process_cmd() {
 	let mut tok_parameters = TokenizerParameters::new();
 	let parameters: Vec<String> = env::args().collect();
 	vaildate_parameters(&parameters);
 
-	let options = parameters[1].split(",").collect::<Vec<&str>>();
-	tok_parameters.bin_dat = read_file(&parameters[2], tok_parameters.bytes_to_read);
+	tok_parameters.mode = set_mode(&parameters);
+	let options = parameters[2].split(",").collect::<Vec<&str>>();
+	tok_parameters.bin_dat = read_file(&parameters[3], tok_parameters.bytes_to_read);
 	tok_parameters.dbg_lv = parse_uint(&options, "v=").unwrap_or(0b1_1111);
 	tok_parameters.bytes_to_read = parse_uint(&options, "br=");
 	tok_parameters.multi_threaded = parse_uint(&options, "mt=");
@@ -195,7 +211,6 @@ fn process_cmd() {
 		parse_uint(&options, "tcb="),
 		Some(tok_parameters.bin_dat.clone().unwrap().len())
 	);
-	// tok_parameters.mode = t, e ,d // t=train, e=encode, d=decode
 
 	if tok_parameters.has_verbose() { println!("Verbose: args: {:?}", parameters); }
 	if tok_parameters.has_verbose() { println!("Verbose: options: {:?}", options); }
@@ -203,7 +218,9 @@ fn process_cmd() {
 	if tok_parameters.is_train() {
 		tok_trainer::entry(&mut tok_parameters);
 	} else if tok_parameters.is_encode() {
-		tok_codec::demo();
+		tok_codec::demo(&tok_parameters);
+	} else if tok_parameters.is_decode() {
+		unimplemented!()
 	} else if tok_parameters.is_none() {
 		eprintln!("No mode is specified; exiting the program.");
 		std::process::exit(1);
