@@ -7,8 +7,8 @@
 int main() {
 	printf("Hello World!\n");
 
-	test_stle_modules();
-	test_tok_trainer_modules();
+	stle_test_modules();
+	tok_trainer_test_modules();
 
 	return 0;
 }

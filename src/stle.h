@@ -57,11 +57,11 @@ typedef struct Bytes {
 
 TrieNode *stle_trie_new();
 void stle_print_all_keys_and_values(const TrieNode* node, u8 *prefix, u32 depth);
-ErrorCode stle_trie_prt_all(const TrieNode* root);
-ErrorCode stle_trie_insert(TrieNode *crawl_node, Bytes *key);
-u1 stle_trie_search(TrieNode *crawl_node, Bytes *key);
-ErrorCode stle_trie_get(TrieNode **return_node, Bytes *key);
+ErrorCode stle_trie_prt_all_unchecked(const TrieNode* root);
+ErrorCode stle_trie_insert_unchecked(TrieNode *crawl_node, Bytes *key);
+u1 stle_trie_search_unchecked(TrieNode *crawl_node, Bytes *key);
+ErrorCode stle_trie_get_unchecked(TrieNode **return_node, Bytes *key);
 ErrorCode stle_read_file(u8 file_path[], u32 bytes_to_read, mut_u8 **data);
-ErrorCode test_stle_trie();
-ErrorCode test_stle_read_file();
-ErrorCode test_stle_modules();
+ErrorCode stle_test_trie();
+ErrorCode stle_test_read_file();
+ErrorCode stle_test_modules();

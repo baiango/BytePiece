@@ -30,8 +30,11 @@ I'll hold no liability for misuse of BytePiece. You are welcome to do anything l
 	-	`scoop install gdb`  
 	-	To debug: `gdb --batch -ex run output/bytepiece`  
 2.	[Cppcheck static analyzer](https://cppcheck.net/) installation
-	-	[Download setup msi at Github](https://github.com/danmar/cppcheck/releases/) or `sudo apt-get install cppcheck` on Linux.  
+	-	[Download the setup msi at Github](https://github.com/danmar/cppcheck/releases/) or `sudo apt-get install cppcheck` on Linux.  
 	-	To debug: `Ctrl+Shift+O` to open a project file and select [bytepiece.cppcheck](bytepiece.cppcheck).  
 3.	Clang static analyzer installation  
 	-	`scoop install llvm`  
 	-	To debug: `clang -Wall --analyze src/main.c`  
+4.	Dr. memory memory debugger
+	-	[Download the setup msi at Dr. memory](https://drmemory.org/page_download.html)
+	-	To debug: `drmemory -- output/bytepiece`  
