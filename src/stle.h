@@ -17,7 +17,7 @@ mut_##T mut_##T##_max(mut_##T a, mut_##T b);
 TYPEDEF(T, N) \
 DEF_MIN_MAX(N)
 
-DEF_DATA(bool, u1)
+TYPEDEF(bool, u1)
 
 DEF_DATA(char, i8)
 DEF_DATA(short, i16)
@@ -37,20 +37,31 @@ DEF_DATA(double, f64)
 
 typedef enum ErrorCode {
 	OK,
-	FILE_NOT_FOUND,
+	FILE_NOT_FOUND_ERR,
 	MALLOC_ERR,
+	TRIE_NODE_NOT_FOUND_ERR,
+	EMPTY_ERR,
 } ErrorCode;
 
 typedef struct TrieNode {
 	struct TrieNode *children[UINT8_MAX];
+	mut_u32 value;
 	mut_u1 is_end_of_word;
 } TrieNode;
 
+typedef struct Bytes {
+	mut_u32 len;
+	mut_u8 *data;
+} Bytes;
+
 
 TrieNode *stle_trie_new();
-ErrorCode stle_trie_insert_key(TrieNode *crawl_node, i8 *key);
-u1 stle_trie_search(TrieNode *crawl_node, i8 *key);
-ErrorCode stle_read_file(i8 file_path[], u32 bytes_to_read, mut_i8 **data);
+void stle_print_all_keys_and_values(const TrieNode* node, u8 *prefix, u32 depth);
+ErrorCode stle_trie_prt_all(const TrieNode* root);
+ErrorCode stle_trie_insert(TrieNode *crawl_node, Bytes *key);
+u1 stle_trie_search(TrieNode *crawl_node, Bytes *key);
+ErrorCode stle_trie_get(TrieNode **return_node, Bytes *key);
+ErrorCode stle_read_file(u8 file_path[], u32 bytes_to_read, mut_u8 **data);
 ErrorCode test_stle_trie();
 ErrorCode test_stle_read_file();
-ErrorCode test_modules();
+ErrorCode test_stle_modules();

@@ -6,18 +6,12 @@
 
 
 #define IMPL_MIN_MAX(type) \
-type type##_min(type a, type b) { \
-	return a < b ? a : b; \
-} \
- \
-type type##_max(type a, type b) { \
-	return a > b ? a : b; \
-} \
- \
+type type##_min(type a, type b) { return a < b ? a : b; } \
+type type##_max(type a, type b) { return a > b ? a : b; } \
 mut_##type mut_##type##_min(mut_##type a, mut_##type b) { \
 	return a < b ? a : b; \
 } \
- \
+\
 mut_##type mut_##type##_max(mut_##type a, mut_##type b) { \
 	return a > b ? a : b; \
 }
@@ -41,6 +35,7 @@ TrieNode *stle_trie_new() {
 
 	if (root) {
 		root->is_end_of_word = false;
+		root->value = 0;
 
 		for (mut_u8 i = 0; i < UINT8_MAX; i++) {
 			root->children[i] = EMPTY_TRIE;
@@ -50,43 +45,94 @@ TrieNode *stle_trie_new() {
 	return root;
 }
 
-ErrorCode stle_trie_insert_key(TrieNode *current_node, i8 *key) {
-	u32 key_len = strlen(key);
 
-	for (mut_u8 depth = 0; depth < key_len; depth++) {
-		u8 index = key[depth];
+// Function to print out the contents of a Trie node
+void stle_print_all_keys_and_values(const TrieNode* node, u8 *prefix, u32 depth) {
+	u8 MAX_PRINT_DEPTH = 5;
 
-		if (!current_node->children[index]) {
-			current_node->children[index] = stle_trie_new();
+	if (!node) {
+		return;
+	}
+	// Print the current character in the prefix
+	if (node->is_end_of_word) {
+		// printf("node->is_end_of_word: ");
+		printf("[");
+		for (mut_u32 i = 0; i < u32_min(depth - 1, MAX_PRINT_DEPTH - 1); ++i) {
+			printf("%x,", prefix[i]);
 		}
-
-		current_node = current_node->children[index];
+		printf("%x", prefix[depth - 1]);
+		if (depth > MAX_PRINT_DEPTH) {
+			printf("...");
+		}
+		printf("]    %u\n", node->value);
 	}
 
-	current_node->is_end_of_word = true;
+	// Recursively traverse each child node
+	for (mut_u8 c = 0; c < UINT8_MAX; ++c) {
+		if (node->children[c]) {
+			mut_u8 next_prefix[depth + 1];
+			strcpy((mut_i8 *)next_prefix, (i8 *)prefix);
+			next_prefix[depth] = c;
+			stle_print_all_keys_and_values(node->children[c], next_prefix, depth + 1);
+		}
+	}
+}
+
+// Caller function to initialize the root node and pass it to the printing function
+ErrorCode stle_trie_prt_all(const TrieNode* root) {
+	stle_print_all_keys_and_values(root, (u8 *)"", 0);
 	return OK;
 }
 
-u1 stle_trie_search(TrieNode *current_node, i8 *key) {
-	u32 length = strlen(key);
+ErrorCode stle_trie_insert(TrieNode *search_node, Bytes *key) {
+	// Don't put any checks in here! It should be done by the caller!
+	for (mut_u32 depth = 0; depth < key->len; depth++) {
+		u8 index = key->data[depth];
 
-	for (mut_u8 depth = 0; depth < length; depth++) {
-		i32 index = key[depth];
+		if (!search_node->children[index]) {
+			search_node->children[index] = stle_trie_new();
+		}
+		search_node = search_node->children[index];
+	}
 
-		if (!current_node->children[index]) {
+	search_node->is_end_of_word = true;
+	return OK;
+}
+
+u1 stle_trie_search(TrieNode *search_node, Bytes *key) {
+	// Don't put any checks in here! It should be done by the caller!
+	for (mut_u32 depth = 0; depth < key->len; depth++) {
+		u8 index = key->data[depth];
+
+		if (!search_node->children[index]) {
 			return false;
 		}
 
-		current_node = current_node->children[index];
+		search_node = search_node->children[index];
 	}
 
-	return (EMPTY_TRIE != current_node && current_node->is_end_of_word);
+	return (EMPTY_TRIE != search_node && search_node->is_end_of_word);
 }
 
-ErrorCode stle_read_file(i8 file_path[], u32 bytes_to_read, mut_i8 **data) {
-	FILE *file = fopen(file_path, "r");
+ErrorCode stle_trie_get(TrieNode **return_node, Bytes *key) {
+	// Don't put any checks in here! It should be done by the caller!
+	for (mut_u32 depth = 0; depth < key->len; depth++) {
+		u8 index = key->data[depth];
+
+		if (!(*return_node)->children[index]) {
+			return TRIE_NODE_NOT_FOUND_ERR;
+		}
+
+		*return_node = (*return_node)->children[index];
+	}
+
+	return OK;
+}
+
+ErrorCode stle_read_file(u8 file_path[], u32 bytes_to_read, mut_u8 **data) {
+	FILE *file = fopen((i8 *)file_path, "r");
 	if (file == NULL) {
-		return FILE_NOT_FOUND;
+		return FILE_NOT_FOUND_ERR;
 	}
 
 	// Get the size of the file
@@ -95,7 +141,7 @@ ErrorCode stle_read_file(i8 file_path[], u32 bytes_to_read, mut_i8 **data) {
 	rewind(file);
 
 	// Allocate enough memory to hold the contents of the file
-	*data = malloc((file_size + 1) * sizeof(i8));
+	*data = malloc((file_size + 1) * sizeof(u8));
 	if (*data == NULL) {
 		fclose(file);
 		return MALLOC_ERR;
@@ -104,7 +150,7 @@ ErrorCode stle_read_file(i8 file_path[], u32 bytes_to_read, mut_i8 **data) {
 	// Copy the contents of the file into the buffer
 	size_t num_read;
 	size_t total_read = 0;
-	while ((num_read = fread(*data + total_read, sizeof(i8), 1023, file)) > 0) {
+	while ((num_read = fread(*data + total_read, sizeof(u8), 1023, file)) > 0) {
 		total_read += num_read;
 	}
 
@@ -120,23 +166,35 @@ ErrorCode stle_read_file(i8 file_path[], u32 bytes_to_read, mut_i8 **data) {
 ErrorCode test_stle_trie() {
 	TrieNode *root = stle_trie_new();
 
-	stle_trie_insert_key(root, "hello");
-	stle_trie_insert_key(root, "world");
+	Bytes test_var_1 = {.data = (mut_u8 *)"hello", .len = 5};
+	Bytes test_var_2 = {.data = (mut_u8 *)"world", .len = 5};
+	stle_trie_insert(root, &test_var_1);
+	stle_trie_insert(root, &test_var_2);
 
-	printf("Trie \"hello\": %s, ", stle_trie_search(root, "hello") ? "Found" : "Not Found");
-	printf("Trie \"hell\": %s, ", stle_trie_search(root, "hell") ? "Found" : "Not Found");
-	printf("Trie \"world\": %s, ", stle_trie_search(root, "world") ? "Found" : "Not Found");
-	printf("Trie \"hi\": %s\n", stle_trie_search(root, "hi") ? "Found" : "Not Found");
 
+	TrieNode *child_node = root;
+	u32 result = stle_trie_get(&child_node, &test_var_1);
+	if (result) {
+		printf("result is not ok: %u\n", result);
+	}
+	child_node->value += 3;
+
+
+	printf("Trie \"hello\": %s, ", stle_trie_search(root, &test_var_1) ? "Found" : "Not Found");
+	printf("Trie \"hell\": %s, ", stle_trie_search(root, &(Bytes){.data = (mut_u8 *)"hell", .len = 4}) ? "Found" : "Not Found");
+	printf("Trie \"world\": %s, ", stle_trie_search(root, &test_var_2) ? "Found" : "Not Found");
+	printf("Trie \"hi\": %s\n", stle_trie_search(root, &(Bytes){.data = (mut_u8 *)"hi", .len = 2}) ? "Found" : "Not Found");
+
+	stle_trie_prt_all(root);
 	return OK;
 }
 
 ErrorCode test_stle_read_file() {
-	i8 file_path[] = "src/main.c";
-	mut_i8 *data;
+	u8 file_path[] = "src/main.c";
+	mut_u8 *data;
 	if (stle_read_file(file_path, 0xfff, &data) != OK) {
 		printf("Failed to read file %s!\n", file_path);
-		return FILE_NOT_FOUND;
+		return FILE_NOT_FOUND_ERR;
 	}
 
 	printf("%s", data);
@@ -144,7 +202,7 @@ ErrorCode test_stle_read_file() {
 	return OK;
 }
 
-ErrorCode test_modules() {
+ErrorCode test_stle_modules() {
 	ErrorCode result = OK;
 	result += test_stle_read_file();
 	result += test_stle_trie();
