@@ -56,7 +56,7 @@ typedef struct Bytes {
 
 
 TrieNode *stle_trie_new();
-void stle_print_all_keys_and_values(const TrieNode* node, u8 *prefix, u32 depth);
+void stle_print_all_keys_and_values_unchecked(const TrieNode* node, u8 *prefix, u32 depth);
 ErrorCode stle_trie_prt_all_unchecked(const TrieNode* root);
 ErrorCode stle_trie_insert_unchecked(TrieNode *crawl_node, Bytes *key);
 u1 stle_trie_search_unchecked(TrieNode *crawl_node, Bytes *key);

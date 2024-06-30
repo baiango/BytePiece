@@ -72,14 +72,14 @@ void stle_print_all_keys_and_values_unchecked(const TrieNode* node, u8 *prefix, 
 			mut_u8 next_prefix[depth + 1];
 			strcpy((mut_i8 *)next_prefix, (i8 *)prefix);
 			next_prefix[depth] = c;
-			stle_print_all_keys_and_values(node->children[c], next_prefix, depth + 1);
+			stle_print_all_keys_and_values_unchecked(node->children[c], next_prefix, depth + 1);
 		}
 	}
 }
 
 // Caller function to initialize the root node and pass it to the printing function
-ErrorCode stle_trie_prt_all(const TrieNode* root) {
-	stle_print_all_keys_and_values(root, (u8 *)"", 0);
+ErrorCode stle_trie_prt_all_unchecked(const TrieNode* root) {
+	stle_print_all_keys_and_values_unchecked(root, (u8 *)"", 0);
 	return OK;
 }
 
@@ -184,7 +184,7 @@ ErrorCode stle_test_trie() {
 	printf("Trie \"world\": %s, ", stle_trie_search_unchecked(root, &test_var_2) ? "Found" : "Not Found");
 	printf("Trie \"hi\": %s\n", stle_trie_search_unchecked(root, &(Bytes){.data = (mut_u8 *)"hi", .len = 2}) ? "Found" : "Not Found");
 
-	stle_trie_prt_all(root);
+	stle_trie_prt_all_unchecked(root);
 	return OK;
 }
 
